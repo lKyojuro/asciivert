@@ -4,7 +4,8 @@ import {
   Check, FileCode, Wand2, ChevronDown, ChevronRight,
   Play, Pause, AlertCircle, ImagePlus, Film, AlertTriangle, X,
   Download, Globe, Terminal, FileText, Code2, Command, Monitor, Archive,
-  Search, Plus, Loader2, Scissors, Sparkles, SlidersHorizontal, Maximize2
+  Search, Plus, Loader2, Scissors, Sparkles, SlidersHorizontal, Maximize2,
+  Zap, Palette, Activity
 } from 'lucide-react';
 
 const ASCII_FORMATS = {
@@ -15,9 +16,17 @@ const ASCII_FORMATS = {
   minimal: { name: 'Minimal', chars: ' .-:*' },
   detailed: { name: 'Detailliert', chars: ' .\'\'`^",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$' },
   shadow: { name: 'Schatten', chars: ' ░▒▓█▄▀▌▐' },
-  geometric: { name: 'Geometrisch', chars: ' ·∘○◎●◐◑◒◓' },
-  katakana: { name: 'Katakana', chars: ' ｦｱｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾙﾚﾛﾝ' },
-  emoji: { name: 'Emoji', chars: ' ·░▪◾◼⬛' }
+  geometric: { name: 'Geometrisch', chars: ' .+*oO0#@' },
+  katakana: { name: 'Katakana', chars: ' ._-~:;!=+/|\\\\()[]{}#@' },
+  emoji: { name: 'Emoji', chars: ' ▒▓█▄▀▌▐░' }
+};
+
+const THEMES = {
+  purple: { name: 'Purple', accent: '#a855f7', rgb: '168,85,247', hover: 'rgba(168,85,247,0.3)' },
+  emerald: { name: 'Emerald', accent: '#34d399', rgb: '52,211,153', hover: 'rgba(52,211,153,0.3)' },
+  cyan: { name: 'Cyan', accent: '#22d3ee', rgb: '34,211,238', hover: 'rgba(34,211,238,0.3)' },
+  rose: { name: 'Rose', accent: '#fb7185', rgb: '251,113,133', hover: 'rgba(251,113,133,0.3)' },
+  amber: { name: 'Amber', accent: '#fbbf24', rgb: '251,191,36', hover: 'rgba(251,191,36,0.3)' },
 };
 
 // Custom Hook für Debouncing
@@ -57,8 +66,12 @@ const ScrambleText = ({ text, className = "" }) => {
 };
 
 // --- Animated ASCII Wave Background ---
-const AsciiWaveBackground = () => {
+const AsciiWaveBackground = ({ paused = false, accentRgb = '168,85,247' }) => {
   const canvasRef = useRef(null);
+  const pausedRef = useRef(paused);
+  const accentRef = useRef(accentRgb);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  useEffect(() => { accentRef.current = accentRgb; }, [accentRgb]);
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -69,20 +82,31 @@ const AsciiWaveBackground = () => {
     const waveChars = " .:-=+*#%@";
     const fontSize = 16;
     let cols = 0, rows = 0;
+    let drawnPaused = false;
     const resize = () => {
       width = window.innerWidth; height = window.innerHeight;
       canvas.width = width; canvas.height = height;
       cols = Math.floor(width / fontSize); rows = Math.floor(height / fontSize);
       ctx.font = `${fontSize}px monospace`;
+      drawnPaused = false;
     };
     window.addEventListener('resize', resize);
     resize();
-    const handleMouseMove = (e) => { targetMouseX = e.clientX; targetMouseY = e.clientY; };
+    const handleMouseMove = (e) => { if (!pausedRef.current) { targetMouseX = e.clientX; targetMouseY = e.clientY; } };
     window.addEventListener('mousemove', handleMouseMove);
     let lastRenderTime = 0;
-    const frameInterval = 50; // ~20fps for background (saves CPU)
+    const frameInterval = 50;
     const render = (time) => {
       animationFrameId = requestAnimationFrame(render);
+      if (pausedRef.current) {
+        if (!drawnPaused) {
+          ctx.fillStyle = '#050505';
+          ctx.fillRect(0, 0, width, height);
+          drawnPaused = true;
+        }
+        return;
+      }
+      drawnPaused = false;
       if (time - lastRenderTime < frameInterval) return;
       lastRenderTime = time;
       mouseX += (targetMouseX - mouseX) * 0.1;
@@ -90,20 +114,20 @@ const AsciiWaveBackground = () => {
       ctx.fillStyle = '#050505';
       ctx.fillRect(0, 0, width, height);
       const t = time * 0.001;
-      // Sample every 2nd cell for performance
+      const rgb = accentRef.current;
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           const px = x * fontSize, py = y * fontSize;
           const dx = px - mouseX, dy = py - mouseY;
-          const distSq = dx * dx + dy * dy; // avoid sqrt
-          const mouseInfluence = distSq < 90000 ? Math.max(0, 1 - Math.sqrt(distSq) / 300) : 0;
+          const distSq = dx * dx + dy * dy;
+          const mouseInfluence = distSq < 32400 ? Math.max(0, 1 - Math.sqrt(distSq) / 180) : 0;
           const waveX = Math.sin(x * 0.1 + t + mouseInfluence * 2);
           const waveY = Math.cos(y * 0.1 + t);
           const depth = (waveX * waveY + 1) / 2;
           const charIndex = Math.floor(depth * (waveChars.length - 1));
           const opacity = 0.1 + (depth * 0.3) + (mouseInfluence * 0.5);
           ctx.fillStyle = mouseInfluence > 0.1
-            ? `rgba(168, 85, 247, ${opacity + 0.2})`
+            ? `rgba(${rgb}, ${opacity + 0.2})`
             : `rgba(161, 161, 170, ${opacity})`;
           ctx.fillText(waveChars[charIndex], px, py);
         }
@@ -116,11 +140,11 @@ const AsciiWaveBackground = () => {
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
-  return <canvas ref={canvasRef} style={{willChange: 'contents'}} className="fixed inset-0 w-full h-full pointer-events-none z-0" />;
+  return <canvas ref={canvasRef} style={{ willChange: 'contents' }} className="fixed inset-0 w-full h-full pointer-events-none z-0" />;
 };
 
 // --- ASCII Donut (empty-state animation) ---
-const AsciiDonut = () => {
+const AsciiDonut = ({ accentColor = '#a855f7' }) => {
   const [frame, setFrame] = useState("");
   useEffect(() => {
     let A = 0, B = 0, animationId;
@@ -145,13 +169,13 @@ const AsciiDonut = () => {
         }
       }
       setFrame(b.join(''));
-      animationId = setTimeout(() => requestAnimationFrame(renderDonut), 42); // ~24fps
+      animationId = setTimeout(() => requestAnimationFrame(renderDonut), 42);
     };
     renderDonut();
     return () => { clearTimeout(animationId); cancelAnimationFrame(animationId); };
   }, []);
   return (
-    <pre className="font-mono text-[10px] leading-[0.85] text-purple-400 overflow-hidden flex items-center justify-center select-none">
+    <pre className="text-[10px] leading-[0.85] overflow-hidden flex items-center justify-center select-none" style={{ fontFamily: '"Geist Mono", monospace', color: accentColor }}>
       {frame}
     </pre>
   );
@@ -161,6 +185,8 @@ export default function AsciiConverter() {
   // --- STATE ---
   const [appMode, setAppMode] = useState('static');
   const [isHoveringDrop, setIsHoveringDrop] = useState(false);
+  const dragCounterRef = useRef(0);
+  const [showMetrics, setShowMetrics] = useState(false);
   const [sourceFile, setSourceFile] = useState(null);
   const [sourceUrl, setSourceUrl] = useState(null);
   const [isGif, setIsGif] = useState(false);
@@ -204,9 +230,45 @@ export default function AsciiConverter() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef(null);
 
+  // Theme & Performance Mode
+  const [currentTheme, setCurrentTheme] = useState('purple');
+  const [performanceMode, setPerformanceMode] = useState(false);
+  const themeConfig = THEMES[currentTheme];
+
+  // True FPS tracking for metrics
+  const [realFps, setRealFps] = useState(0);
+
+  useEffect(() => {
+    if (!showMetrics) return;
+    let frames = 0;
+    let lastTime = performance.now();
+    let animId;
+    const measure = (time) => {
+      frames++;
+      if (time - lastTime >= 1000) {
+        setRealFps(Math.round((frames * 1000) / (time - lastTime)));
+        frames = 0;
+        lastTime = time;
+      }
+      animId = requestAnimationFrame(measure);
+    };
+    animId = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(animId);
+  }, [showMetrics]);
+
+  // Slider-drag pause
+  const isAdjustingSliderRef = useRef(false);
+  const wasPlayingBeforeSlider = useRef(false);
+
+  // Frame cache
+  const frameCacheRef = useRef(new Map());
+  const cacheKeyRef = useRef(null);
+
   // Refs
   const asciiDisplayRef = useRef(null);
+  const canvasDisplayRef = useRef(null);
   const outputPanelRef = useRef(null);
+  const fileInputRef = useRef(null);
   const animationRef = useRef(null);
   const currentFrameRef = useRef(0);
   const currentTaskRef = useRef(null);
@@ -223,7 +285,33 @@ export default function AsciiConverter() {
     format, resolution, invert, threshold, contrast, brightness, dithering, colorized
   }), [format, resolution, invert, threshold, contrast, brightness, dithering, colorized]);
 
-  const debouncedSettings = useDebounce(currentSettings, 500);
+  const debounceDelay = isGif ? 700 : 500;
+  const debouncedSettings = useDebounce(currentSettings, debounceDelay);
+
+  // --- SLIDER PAUSE HANDLERS ---
+  const handleSliderStart = useCallback(() => {
+    if (isGif && frames.length > 1 && isPlaying) {
+      isAdjustingSliderRef.current = true;
+      wasPlayingBeforeSlider.current = true;
+      setIsPlaying(false);
+    }
+  }, [isGif, frames.length, isPlaying]);
+
+  useEffect(() => {
+    const handleSliderEnd = () => {
+      if (isAdjustingSliderRef.current && wasPlayingBeforeSlider.current) {
+        isAdjustingSliderRef.current = false;
+        wasPlayingBeforeSlider.current = false;
+        setIsPlaying(true);
+      }
+    };
+    window.addEventListener('mouseup', handleSliderEnd);
+    window.addEventListener('touchend', handleSliderEnd);
+    return () => {
+      window.removeEventListener('mouseup', handleSliderEnd);
+      window.removeEventListener('touchend', handleSliderEnd);
+    };
+  }, []);
 
   // --- KLICK AUSSERHALB DES EXPORT-MENÜS ABFANGEN ---
   useEffect(() => {
@@ -240,10 +328,34 @@ export default function AsciiConverter() {
   useEffect(() => {
     if (!sourceUrl && !gifBuffer) return;
 
+    // --- CACHE CHECK ---
+    const cacheKey = JSON.stringify({ sourceUrl, isGif, ...debouncedSettings });
+    if (frameCacheRef.current.has(cacheKey)) {
+      const cached = frameCacheRef.current.get(cacheKey);
+      setFrames(cached);
+      setCurrentFrameIdx(0);
+      currentFrameRef.current = 0;
+      if (cached.length > 0) {
+        if (cached[0].canvas && canvasDisplayRef.current) {
+          const ctx = canvasDisplayRef.current.getContext('2d');
+          canvasDisplayRef.current.width = cached[0].canvas.width;
+          canvasDisplayRef.current.height = cached[0].canvas.height;
+          ctx.drawImage(cached[0].canvas, 0, 0);
+        } else if (asciiDisplayRef.current) {
+          asciiDisplayRef.current.innerHTML = cached[0].text;
+        }
+      }
+      setIsProcessing(false);
+      return;
+    }
+
     const taskId = Symbol('processing_task');
     currentTaskRef.current = taskId;
+    cacheKeyRef.current = cacheKey;
 
     const processMedia = async () => {
+      // Pause animation during processing to save CPU
+      if (isGif && frames.length > 1) setIsPlaying(false);
       setIsProcessing(true);
       setProcessingProgress(0);
       setErrorMsg(null);
@@ -279,9 +391,10 @@ export default function AsciiConverter() {
                 ctx.clearRect(0, 0, width, height);
                 ctx.drawImage(videoFrame, 0, 0);
 
-                const asciiText = await convertCanvasToAscii(canvas, debouncedSettings);
+                const asciiObj = await convertCanvasToAscii(canvas, debouncedSettings);
                 targetFrames.push({
-                  text: asciiText,
+                  text: asciiObj.text,
+                  canvas: asciiObj.canvas,
                   delay: (videoFrame.duration / 1000) || 100
                 });
 
@@ -299,8 +412,15 @@ export default function AsciiConverter() {
                 setFrames(targetFrames);
                 setCurrentFrameIdx(0);
                 currentFrameRef.current = 0;
-                if (asciiDisplayRef.current && targetFrames.length > 0) {
-                  asciiDisplayRef.current.innerHTML = targetFrames[0].text;
+                if (targetFrames.length > 0) {
+                  if (targetFrames[0].canvas && canvasDisplayRef.current) {
+                    const ctx = canvasDisplayRef.current.getContext('2d');
+                    canvasDisplayRef.current.width = targetFrames[0].canvas.width;
+                    canvasDisplayRef.current.height = targetFrames[0].canvas.height;
+                    ctx.drawImage(targetFrames[0].canvas, 0, 0);
+                  } else if (asciiDisplayRef.current) {
+                    asciiDisplayRef.current.innerHTML = targetFrames[0].text;
+                  }
                 }
               }
               usedNative = true;
@@ -404,9 +524,10 @@ export default function AsciiConverter() {
                 ctx.drawImage(patchCanvas, frame.dims.left, frame.dims.top);
               }
 
-              const asciiText = await convertCanvasToAscii(canvas, debouncedSettings);
+              const asciiObj = await convertCanvasToAscii(canvas, debouncedSettings);
               targetFrames.push({
-                text: asciiText,
+                text: asciiObj.text,
+                canvas: asciiObj.canvas,
                 delay: Math.max(frame.delay || 100, 20)
               });
 
@@ -422,8 +543,23 @@ export default function AsciiConverter() {
               setFrames(targetFrames);
               setCurrentFrameIdx(0);
               currentFrameRef.current = 0;
-              if (asciiDisplayRef.current && targetFrames.length > 0) {
-                asciiDisplayRef.current.innerHTML = targetFrames[0].text;
+              if (targetFrames.length > 0) {
+                if (targetFrames[0].canvas && canvasDisplayRef.current) {
+                  const ctx = canvasDisplayRef.current.getContext('2d');
+                  canvasDisplayRef.current.width = targetFrames[0].canvas.width;
+                  canvasDisplayRef.current.height = targetFrames[0].canvas.height;
+                  ctx.drawImage(targetFrames[0].canvas, 0, 0);
+                } else if (asciiDisplayRef.current) {
+                  asciiDisplayRef.current.innerHTML = targetFrames[0].text;
+                }
+              }
+              // Cache result
+              if (cacheKeyRef.current && targetFrames.length > 0) {
+                if (frameCacheRef.current.size > 5) {
+                  const firstKey = frameCacheRef.current.keys().next().value;
+                  frameCacheRef.current.delete(firstKey);
+                }
+                frameCacheRef.current.set(cacheKeyRef.current, targetFrames);
               }
             }
           }
@@ -444,13 +580,27 @@ export default function AsciiConverter() {
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0);
 
-          const asciiText = await convertCanvasToAscii(canvas, debouncedSettings);
+          const asciiObj = await convertCanvasToAscii(canvas, debouncedSettings);
 
           if (currentTaskRef.current === taskId) {
-            setFrames([{ text: asciiText, delay: 0 }]);
+            const resultFrames = [{ text: asciiObj.text, canvas: asciiObj.canvas, delay: 0 }];
+            setFrames(resultFrames);
             setCurrentFrameIdx(0);
-            if (asciiDisplayRef.current) {
-              asciiDisplayRef.current.innerHTML = asciiText;
+            if (resultFrames[0].canvas && canvasDisplayRef.current) {
+              const ctx = canvasDisplayRef.current.getContext('2d');
+              canvasDisplayRef.current.width = resultFrames[0].canvas.width;
+              canvasDisplayRef.current.height = resultFrames[0].canvas.height;
+              ctx.drawImage(resultFrames[0].canvas, 0, 0);
+            } else if (asciiDisplayRef.current) {
+              asciiDisplayRef.current.innerHTML = resultFrames[0].text;
+            }
+            // Cache result
+            if (cacheKeyRef.current) {
+              if (frameCacheRef.current.size > 5) {
+                const firstKey = frameCacheRef.current.keys().next().value;
+                frameCacheRef.current.delete(firstKey);
+              }
+              frameCacheRef.current.set(cacheKeyRef.current, resultFrames);
             }
           }
         }
@@ -462,6 +612,8 @@ export default function AsciiConverter() {
       } finally {
         if (currentTaskRef.current === taskId) {
           setIsProcessing(false);
+          // Resume animation after processing
+          if (isGif) setIsPlaying(true);
         }
       }
     };
@@ -475,8 +627,15 @@ export default function AsciiConverter() {
 
   // --- DYNAMISCHES DOM UPDATE ---
   useEffect(() => {
-    if (!isPlaying && frames.length > 0 && asciiDisplayRef.current) {
-      asciiDisplayRef.current.innerHTML = frames[currentFrameIdx]?.text || '';
+    if (!isPlaying && frames.length > 0) {
+      if (frames[currentFrameIdx]?.canvas && canvasDisplayRef.current) {
+        const ctx = canvasDisplayRef.current.getContext('2d');
+        canvasDisplayRef.current.width = frames[currentFrameIdx].canvas.width;
+        canvasDisplayRef.current.height = frames[currentFrameIdx].canvas.height;
+        ctx.drawImage(frames[currentFrameIdx].canvas, 0, 0);
+      } else if (asciiDisplayRef.current) {
+        asciiDisplayRef.current.innerHTML = frames[currentFrameIdx]?.text || '';
+      }
     }
   }, [currentFrameIdx, frames, isPlaying]);
 
@@ -488,7 +647,7 @@ export default function AsciiConverter() {
     let accumulatedTime = 0;
 
     const animate = (time) => {
-      const deltaTime = time - lastTime;
+      const deltaTime = Math.min(time - lastTime, 1000);
       lastTime = time;
       accumulatedTime += deltaTime;
 
@@ -500,7 +659,16 @@ export default function AsciiConverter() {
         const nextFrame = (currentFrameRef.current + 1) % frames.length;
         currentFrameRef.current = nextFrame;
 
-        if (asciiDisplayRef.current) {
+        if (frames[nextFrame].canvas && canvasDisplayRef.current) {
+          const ctx = canvasDisplayRef.current.getContext('2d');
+          if (canvasDisplayRef.current.width !== frames[nextFrame].canvas.width) {
+            canvasDisplayRef.current.width = frames[nextFrame].canvas.width;
+            canvasDisplayRef.current.height = frames[nextFrame].canvas.height;
+          } else {
+            ctx.clearRect(0, 0, canvasDisplayRef.current.width, canvasDisplayRef.current.height);
+          }
+          ctx.drawImage(frames[nextFrame].canvas, 0, 0);
+        } else if (asciiDisplayRef.current) {
           asciiDisplayRef.current.innerHTML = frames[nextFrame].text;
         }
 
@@ -556,6 +724,7 @@ export default function AsciiConverter() {
     setTrimStart(0);
     setTrimEnd(0);
     setTrimEnabled(false);
+    frameCacheRef.current.clear();
     if (asciiDisplayRef.current) asciiDisplayRef.current.innerHTML = '';
   };
 
@@ -598,6 +767,7 @@ export default function AsciiConverter() {
     setTrimEnabled(false);
     setActiveTab('output.ascii');
     if (asciiDisplayRef.current) asciiDisplayRef.current.innerHTML = '';
+    if (canvasDisplayRef.current) canvasDisplayRef.current.getContext('2d').clearRect(0, 0, canvasDisplayRef.current.width, canvasDisplayRef.current.height);
 
     try {
       const res = await fetch(gifUrl);
@@ -634,8 +804,16 @@ export default function AsciiConverter() {
     currentFrameRef.current = 0;
     setTrimStart(0);
     setTrimEnd(0);
-    if (asciiDisplayRef.current && trimmedFrames.length > 0) {
-      asciiDisplayRef.current.innerHTML = trimmedFrames[0].text;
+    setTrimEnd(0);
+    if (trimmedFrames.length > 0) {
+      if (trimmedFrames[0].canvas && canvasDisplayRef.current) {
+        const ctx = canvasDisplayRef.current.getContext('2d');
+        canvasDisplayRef.current.width = trimmedFrames[0].canvas.width;
+        canvasDisplayRef.current.height = trimmedFrames[0].canvas.height;
+        ctx.drawImage(trimmedFrames[0].canvas, 0, 0);
+      } else if (asciiDisplayRef.current) {
+        asciiDisplayRef.current.innerHTML = trimmedFrames[0].text;
+      }
     }
   }, [frames, trimStart, trimEnd]);
 
@@ -948,8 +1126,11 @@ export default function AsciiConverter() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-zinc-200 font-sans selection:bg-purple-500/30 overflow-x-hidden relative">
-      <AsciiWaveBackground />
+    <div className={`min-h-screen bg-[#050505] text-zinc-200 overflow-x-hidden relative ${performanceMode ? 'perf-mode' : ''}`}
+      data-theme={currentTheme}
+      style={{ '--accent': themeConfig.accent, '--accent-rgb': themeConfig.rgb, fontFamily: '"Geist", system-ui, sans-serif' }}
+    >
+      <AsciiWaveBackground paused={performanceMode} accentRgb={themeConfig.rgb} />
 
       {/* Main Content Overlay */}
       <div className="relative z-10 container mx-auto px-4 py-8 min-h-screen flex flex-col">
@@ -957,32 +1138,88 @@ export default function AsciiConverter() {
         {/* Navigation */}
         <nav className="flex justify-between items-center mb-16">
           <div className="flex items-center gap-2 text-white">
-            <Terminal className="w-6 h-6 text-purple-400" />
+            <Terminal className="w-6 h-6" style={{ color: themeConfig.accent }} />
             <span className="font-mono font-bold text-lg tracking-tight">
               <ScrambleText text="ASCII.VERT" />
             </span>
           </div>
           <div className="flex justify-center items-center gap-5 font-mono text-xs text-zinc-400">
-            <button onClick={() => setShowGifBrowser(true)} className="hover:text-purple-400 transition-colors flex items-center gap-1.5 font-bold"><Search className="w-4 h-4" /> GIPHY</button>
+            <button onClick={() => setShowGifBrowser(true)} className="transition-colors flex items-center gap-1.5 font-bold hover:opacity-80" style={{ color: themeConfig.accent }}><Search className="w-4 h-4" /> GIPHY</button>
             <div className="w-[1px] h-4 bg-zinc-800"></div>
             <div className="flex bg-zinc-900/80 p-0.5 rounded-lg border border-zinc-800 shadow-inner">
               <button
                 onClick={() => setAppMode('static')}
-                className={`px-3 py-1 text-[10px] uppercase font-bold rounded-md transition-all duration-300 ${appMode === 'static' ? 'bg-purple-500 text-[#050505] shadow-[0_0_10px_rgba(52,211,153,0.3)]' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`px-3 py-1 text-[10px] uppercase font-bold rounded-md transition-all duration-300 ${appMode === 'static' ? 'text-[#050505]' : 'text-zinc-500 hover:text-zinc-300'}`}
+                style={appMode === 'static' ? { background: themeConfig.accent, boxShadow: `0 0 10px ${themeConfig.hover}` } : {}}
               >
                 Image
               </button>
               <button
                 onClick={() => setAppMode('gif')}
-                className={`px-3 py-1 text-[10px] uppercase font-bold rounded-md transition-all duration-300 ${appMode === 'gif' ? 'bg-purple-500 text-[#050505] shadow-[0_0_10px_rgba(52,211,153,0.3)]' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`px-3 py-1 text-[10px] uppercase font-bold rounded-md transition-all duration-300 ${appMode === 'gif' ? 'text-[#050505]' : 'text-zinc-500 hover:text-zinc-300'}`}
+                style={appMode === 'gif' ? { background: themeConfig.accent, boxShadow: `0 0 10px ${themeConfig.hover}` } : {}}
               >
                 Video / GIF
               </button>
             </div>
+            <div className="w-[1px] h-4 bg-zinc-800"></div>
+            {/* Theme Switcher */}
+            <div className="flex items-center gap-1.5">
+              <Palette className="w-3.5 h-3.5 text-zinc-500" />
+              {Object.entries(THEMES).map(([key, t]) => (
+                <button
+                  key={key}
+                  onClick={() => setCurrentTheme(key)}
+                  className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${currentTheme === key ? 'scale-125 border-white' : 'border-zinc-700 hover:border-zinc-500 hover:scale-110'}`}
+                  style={{ background: t.accent }}
+                  title={t.name}
+                />
+              ))}
+            </div>
+            <div className="w-[1px] h-4 bg-zinc-800"></div>
+            {/* Performance Toggle */}
+            <button
+              onClick={() => setPerformanceMode(!performanceMode)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] uppercase font-bold transition-all duration-300 ${performanceMode
+                ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                : 'border-zinc-800 bg-zinc-900/50 text-zinc-500 hover:text-zinc-300'
+                }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              PERF
+            </button>
+            <div className="relative flex items-center">
+              <button
+                onClick={() => setShowMetrics(!showMetrics)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] uppercase font-bold transition-all duration-300 ${showMetrics
+                  ? `bg-opacity-10 text-zinc-200`
+                  : 'border-zinc-800 bg-zinc-900/50 text-zinc-500 hover:text-zinc-300'
+                  }`}
+                style={showMetrics ? { borderColor: `rgba(${themeConfig.rgb}, 0.5)`, background: `rgba(${themeConfig.rgb}, 0.1)`, color: themeConfig.accent } : {}}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                METRICS
+              </button>
+              {showMetrics && (
+                <div className="absolute left-full ml-3 flex items-center gap-2 whitespace-nowrap z-30">
+                  <div className="w-[1px] h-4 bg-zinc-800"></div>
+                  {[
+                    ['FPS', realFps || '—'],
+                    ['RES', debouncedSettings.resolution],
+                    ...(isGif && frames.length > 1 ? [['DELAY', `${frames[currentFrameIdx]?.delay || 100}ms`]] : [])
+                  ].map(([label, val]) => (
+                    <span key={label} className="flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold" style={{ borderColor: `rgba(${themeConfig.rgb}, 0.25)`, background: `rgba(${themeConfig.rgb}, 0.05)`, fontFamily: '"Geist Mono", monospace' }}>
+                      <span className="text-zinc-500">{label}</span>
+                      <span style={{ color: themeConfig.accent }}>{val}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-6 font-mono text-xs text-zinc-400">
-            <button className="flex items-center gap-2 bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800 backdrop-blur-md px-4 py-2 rounded-full text-zinc-200 transition-all duration-300 hover:border-purple-500/30 group">
-              <Code2 className="w-4 h-4 group-hover:text-purple-400 transition-colors" />
+            <button className="flex items-center gap-2 bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800 backdrop-blur-md px-4 py-2 rounded-full text-zinc-200 transition-all duration-300 group" style={{ '--tw-border-opacity': 1 }}>
+              <Code2 className="w-4 h-4 transition-colors" style={{ color: themeConfig.accent }} />
               <span>GITHUB</span>
             </button>
           </div>
@@ -991,39 +1228,18 @@ export default function AsciiConverter() {
 
 
         {/* Converter Interface */}
-        <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow mb-12">
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow mb-4 items-start">
 
           {/* Left Panel: Inputs & Settings */}
-          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-6">
+          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-6 lg:sticky lg:top-6 lg:h-[calc(100vh-120px)] lg:overflow-y-auto hide-scrollbar">
 
-            {/* Dropzone */}
-            <label
-              className={`relative flex-grow min-h-[250px] flex flex-col items-center justify-center p-8 rounded-3xl border-2 border-dashed transition-all duration-300 backdrop-blur-xl bg-zinc-950/40 cursor-pointer ${isHoveringDrop ? 'border-purple-500/50 bg-purple-500/5' : 'border-zinc-800 hover:border-zinc-700'}`}
-              onMouseEnter={() => setIsHoveringDrop(true)}
-              onMouseLeave={() => setIsHoveringDrop(false)}
-            >
-              <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-              <div className="absolute inset-0 bg-gradient-to-br from-zinc-900/50 to-transparent rounded-3xl -z-10 pointer-events-none" />
-
-              <div className={`p-4 rounded-full bg-zinc-900 border border-zinc-800 mb-4 transition-transform duration-500 ${isHoveringDrop ? 'scale-110' : 'scale-100'}`}>
-                <Upload className={`w-8 h-8 ${isHoveringDrop ? 'text-purple-400' : 'text-zinc-400'}`} />
-              </div>
-              <h3 className="text-lg font-medium text-white mb-2 text-center truncate w-full max-w-[200px]" title={sourceFile ? sourceFile.name : ""}>
-                {sourceFile ? sourceFile.name : "Initialize Conversion"}
-              </h3>
-              <p className="text-zinc-500 text-xs text-center max-w-[200px] mb-6">
-                Drag and drop your image file here, or click to browse your system.
-              </p>
-
-              <div className="px-5 py-2.5 rounded-xl bg-white text-black text-sm font-medium hover:bg-zinc-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]">
-                Select File
-              </div>
-            </label>
+            {/* File Input (hidden, triggered from output panel) */}
+            <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
 
             {/* Settings Card */}
-            <div className="bg-zinc-950/60 backdrop-blur-xl border border-zinc-800/80 p-6 rounded-3xl">
-              <div className="flex items-center gap-2 mb-6 text-white font-mono text-sm border-b border-zinc-800 pb-4">
-                <SlidersHorizontal className="w-4 h-4 text-purple-400" />
+            <div className="bg-zinc-950/60 backdrop-blur-xl border border-zinc-800/80 p-5 rounded-2xl">
+              <div className="flex items-center gap-2 mb-4 text-white font-mono text-sm border-b border-zinc-800 pb-3">
+                <SlidersHorizontal className="w-4 h-4" style={{ color: themeConfig.accent }} />
                 <span>PARAMETERS</span>
               </div>
 
@@ -1031,14 +1247,17 @@ export default function AsciiConverter() {
                 <div>
                   <div className="flex justify-between text-xs font-mono text-zinc-400 mb-2">
                     <span>RESOLUTION</span>
-                    <span className="text-purple-400">{resolution}</span>
+                    <span style={{ color: themeConfig.accent }}>{resolution}</span>
                   </div>
                   <input
                     type="range"
-                    min="20" max={appMode === 'gif' ? "200" : "400"} step="10"
+                    min="20" max="140" step="10"
                     value={resolution}
                     onChange={(e) => setResolution(parseInt(e.target.value))}
-                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    onMouseDown={handleSliderStart}
+                    onTouchStart={handleSliderStart}
+                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                    style={{ accentColor: themeConfig.accent }}
                   />
                   {appMode === 'gif' && resolution > 120 && (
                     <div className="flex items-center gap-1 mt-2 text-[10px] text-amber-400">
@@ -1050,28 +1269,34 @@ export default function AsciiConverter() {
                 <div>
                   <div className="flex justify-between text-xs font-mono text-zinc-400 mb-2">
                     <span>CONTRAST</span>
-                    <span className="text-purple-400">{contrast}%</span>
+                    <span style={{ color: themeConfig.accent }}>{contrast}%</span>
                   </div>
                   <input
                     type="range"
                     min="50" max="200" step="5"
                     value={contrast}
                     onChange={(e) => setContrast(parseInt(e.target.value))}
-                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    onMouseDown={handleSliderStart}
+                    onTouchStart={handleSliderStart}
+                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                    style={{ accentColor: themeConfig.accent }}
                   />
                 </div>
 
                 <div>
                   <div className="flex justify-between text-xs font-mono text-zinc-400 mb-2">
                     <span>BRIGHTNESS</span>
-                    <span className="text-purple-400">{brightness}%</span>
+                    <span style={{ color: themeConfig.accent }}>{brightness}%</span>
                   </div>
                   <input
                     type="range"
                     min="50" max="200" step="5"
                     value={brightness}
                     onChange={(e) => setBrightness(parseInt(e.target.value))}
-                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    onMouseDown={handleSliderStart}
+                    onTouchStart={handleSliderStart}
+                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                    style={{ accentColor: themeConfig.accent }}
                   />
                 </div>
 
@@ -1079,47 +1304,58 @@ export default function AsciiConverter() {
                   <div>
                     <div className="flex justify-between text-xs font-mono text-zinc-400 mb-2">
                       <span>THRESHOLD</span>
-                      <span className="text-purple-400">{threshold}</span>
+                      <span style={{ color: themeConfig.accent }}>{threshold}</span>
                     </div>
                     <input
                       type="range"
                       min="1" max="254"
                       value={threshold}
                       onChange={(e) => setThreshold(parseInt(e.target.value))}
-                      className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                      onMouseDown={handleSliderStart}
+                      onTouchStart={handleSliderStart}
+                      className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                      style={{ accentColor: themeConfig.accent }}
                     />
                   </div>
                 )}
 
                 {/* More Settings */}
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono text-zinc-400 pt-2 border-t border-zinc-800">
-                  <label className="flex items-center gap-2 cursor-pointer group hover:text-white">
-                    <input type="checkbox" className="accent-violet-500 outline-none w-3.5 h-3.5 border border-zinc-600 bg-zinc-900 checked:bg-violet-500 appearance-none rounded-sm" checked={colorized} onChange={(e) => setColorized(e.target.checked)} />
+                <div className="grid grid-cols-2 gap-3 text-xs font-mono text-zinc-400 pt-3 border-t border-zinc-800">
+                  <label className="flex items-center gap-2.5 cursor-pointer group hover:text-white transition-colors">
+                    <span className="themed-checkbox" style={{ '--cb-color': themeConfig.accent, '--cb-rgb': themeConfig.rgb }}>
+                      <input type="checkbox" checked={colorized} onChange={(e) => setColorized(e.target.checked)} />
+                      <span className="checkmark"></span>
+                    </span>
                     Colorized
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer group hover:text-white">
-                    <input type="checkbox" className="accent-violet-500 outline-none w-3.5 h-3.5 border border-zinc-600 bg-zinc-900 checked:bg-violet-500 appearance-none rounded-sm" checked={dithering} onChange={(e) => setDithering(e.target.checked)} />
+                  <label className="flex items-center gap-2.5 cursor-pointer group hover:text-white transition-colors">
+                    <span className="themed-checkbox" style={{ '--cb-color': themeConfig.accent, '--cb-rgb': themeConfig.rgb }}>
+                      <input type="checkbox" checked={dithering} onChange={(e) => setDithering(e.target.checked)} />
+                      <span className="checkmark"></span>
+                    </span>
                     Dithering
                   </label>
                 </div>
 
-                <div className="pt-2 flex flex-col gap-3">
+                <div className="pt-3 flex flex-col gap-3">
                   <div className="relative group">
                     <select
                       value={format}
                       onChange={(e) => setFormat(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 py-3 px-4 rounded-xl text-sm font-medium appearance-none cursor-pointer hover:border-zinc-700 outline-none focus:border-purple-500/50 transition-colors"
+                      className="w-full bg-zinc-900/80 border border-zinc-800 text-zinc-300 py-3 px-4 pr-10 rounded-2xl text-sm font-medium appearance-none cursor-pointer hover:border-zinc-600 outline-none transition-all duration-200"
+                      style={{ fontFamily: '"Geist", system-ui, sans-serif' }}
                     >
                       {Object.entries(ASCII_FORMATS).map(([key, val]) => (
                         <option key={key} value={key}>{val.name}</option>
                       ))}
                     </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                    <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
                   </div>
 
                   <button
                     onClick={() => setInvert(!invert)}
-                    className={`flex-1 ${invert ? 'bg-purple-500/10 border-purple-500/30 text-purple-400' : 'bg-zinc-900 border-zinc-800 text-zinc-300'} hover:bg-zinc-800 border py-3 rounded-xl text-sm font-medium transition-colors flex justify-center items-center gap-2`}
+                    className={`flex-1 ${invert ? '' : 'bg-zinc-900 border-zinc-800 text-zinc-300'} hover:bg-zinc-800 border py-3 rounded-xl text-sm font-medium transition-colors flex justify-center items-center gap-2`}
+                    style={invert ? { background: `rgba(${themeConfig.rgb}, 0.1)`, borderColor: `rgba(${themeConfig.rgb}, 0.3)`, color: themeConfig.accent } : {}}
                   >
                     <RefreshCw className="w-4 h-4" /> {invert ? 'Inverted' : 'Invert'}
                   </button>
@@ -1128,48 +1364,58 @@ export default function AsciiConverter() {
               </div>
             </div>
 
-            {/* Trimming & Animation Tools for GIF */}
+            {/* Animation Tools for GIF */}
             {isGif && frames.length > 1 && (
-              <div className="bg-zinc-950/60 backdrop-blur-xl border border-zinc-800/80 p-6 rounded-3xl">
-                <div className="flex items-center gap-2 mb-6 text-white font-mono text-sm border-b border-zinc-800 pb-4">
-                  <Film className="w-4 h-4 text-purple-400" />
+              <div className="bg-zinc-950/60 backdrop-blur-xl border border-zinc-800/80 p-5 rounded-2xl">
+                <div className="flex items-center gap-2 mb-4 text-white text-sm border-b border-zinc-800 pb-3" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                  <Film className="w-4 h-4" style={{ color: themeConfig.accent }} />
                   <span>ANIMATION</span>
                 </div>
 
-                <div className="space-y-4">
-                  {/* Playback */}
-                  <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
-                    <span>FRAME {currentFrameIdx + 1}/{frames.length}</span>
-                    <button onClick={() => setIsPlaying(!isPlaying)} className={`p-1.5 rounded-full ${isPlaying ? 'bg-purple-500 text-[#050505] shadow-[0_0_10px_rgba(52,211,153,0.3)]' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'} transition-all`}>
-                      {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                    </button>
+                {/* Playback Controls */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs text-zinc-400" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                    FRAME <span style={{ color: themeConfig.accent }}>{currentFrameIdx + 1}</span>/{frames.length}
                   </div>
-                  <input
-                    type="range" min="0" max={frames.length - 1} value={currentFrameIdx}
-                    onChange={(e) => { setIsPlaying(false); setCurrentFrameIdx(parseInt(e.target.value)); }}
-                    className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-violet-500 mb-4"
-                  />
+                  <button onClick={() => setIsPlaying(!isPlaying)} className={`p-2 rounded-xl ${isPlaying ? 'text-[#050505]' : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300'} transition-all`} style={isPlaying ? { background: themeConfig.accent, boxShadow: `0 0 12px ${themeConfig.hover}` } : {}}>
+                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  </button>
+                </div>
+                <input
+                  type="range" min="0" max={frames.length - 1} value={currentFrameIdx}
+                  onChange={(e) => { setIsPlaying(false); setCurrentFrameIdx(parseInt(e.target.value)); }}
+                  className="w-full h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer"
+                  style={{ accentColor: themeConfig.accent }}
+                />
 
-                  {/* Trimming */}
-                  <div className="space-y-2 pt-4 border-t border-zinc-800">
-                    <div className="flex justify-between text-xs font-mono text-zinc-400">
+                {/* Trim — dual range slider */}
+                <div className="mt-4 pt-4 border-t border-zinc-800/60">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-xs text-zinc-400" style={{ fontFamily: '"Geist Mono", monospace' }}>
+                      <Scissors className="w-3.5 h-3.5" style={{ color: themeConfig.accent }} />
                       <span>TRIM</span>
-                      <span className="text-violet-400">{trimStart + 1} - {(trimEnd || frames.length - 1) + 1}</span>
                     </div>
-                    <input
-                      type="range" min="0" max={Math.max(0, (trimEnd || frames.length - 1) - 1)}
-                      value={trimStart} onChange={(e) => setTrimStart(parseInt(e.target.value))}
-                      className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-purple-500 mb-2 block"
-                    />
-                    <input
-                      type="range" min={trimStart + 1} max={frames.length - 1}
-                      value={trimEnd || frames.length - 1} onChange={(e) => setTrimEnd(parseInt(e.target.value))}
-                      className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-purple-500 block"
-                    />
-                    <button onClick={applyTrim} disabled={trimStart === 0 && (trimEnd === 0 || trimEnd === frames.length - 1)} className="w-full mt-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50 text-xs font-bold transition-all flex justify-center items-center gap-1.5">
-                      <Scissors className="w-3.5 h-3.5" /> Apply Trim
-                    </button>
+                    <span className="text-[11px] px-2 py-0.5 rounded-md bg-zinc-800/60 border border-zinc-700/40" style={{ color: themeConfig.accent, fontFamily: '"Geist Mono", monospace' }}>keep {(trimEnd || frames.length - 1) - trimStart + 1} of {frames.length}</span>
                   </div>
+                  <div className="dual-range-wrap" style={{ '--range-color': themeConfig.accent }}>
+                    <input
+                      type="range" min="0" max={frames.length - 1}
+                      value={trimStart}
+                      onChange={(e) => { const v = parseInt(e.target.value); if (v < (trimEnd || frames.length - 1)) setTrimStart(v); }}
+                      className="dual-range"
+                    />
+                    <input
+                      type="range" min="0" max={frames.length - 1}
+                      value={trimEnd || frames.length - 1}
+                      onChange={(e) => { const v = parseInt(e.target.value); if (v > trimStart) setTrimEnd(v); }}
+                      className="dual-range"
+                    />
+                  </div>
+                  <button onClick={applyTrim} disabled={trimStart === 0 && (trimEnd === 0 || trimEnd === frames.length - 1)}
+                    className="w-full mt-3 py-2 rounded-xl bg-zinc-900/80 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 text-xs font-bold transition-all flex justify-center items-center gap-2"
+                  >
+                    <Scissors className="w-3.5 h-3.5" /> Trim
+                  </button>
                 </div>
               </div>
             )}
@@ -1177,7 +1423,7 @@ export default function AsciiConverter() {
           </div>
 
           {/* Right Panel: Live Output */}
-          <div ref={outputPanelRef} className="lg:col-span-8 xl:col-span-9 flex flex-col h-[600px] lg:h-auto rounded-3xl border border-zinc-800/80 bg-zinc-950/80 backdrop-blur-2xl overflow-hidden shadow-2xl relative group">
+          <div ref={outputPanelRef} data-output-panel className="lg:col-span-8 xl:col-span-9 flex flex-col h-[600px] lg:h-[calc(100vh-120px)] rounded-3xl border border-zinc-800/80 bg-zinc-950/80 backdrop-blur-2xl overflow-hidden shadow-2xl relative group lg:sticky lg:top-6">
 
             {/* Output Header */}
             <div className="flex justify-between items-center px-6 py-4 bg-zinc-900/50 border-b border-zinc-800/80 backdrop-blur-md z-30">
@@ -1185,7 +1431,7 @@ export default function AsciiConverter() {
                 <div className="flex gap-1.5">
                   <div className="w-3 h-3 rounded-full bg-zinc-700"></div>
                   <div className="w-3 h-3 rounded-full bg-zinc-700"></div>
-                  <div className="w-3 h-3 rounded-full bg-purple-500/50 animate-pulse"></div>
+                  <div className="w-3 h-3 rounded-full animate-pulse" style={{ background: `rgba(${themeConfig.rgb}, 0.5)` }}></div>
                 </div>
                 <span className="text-xs font-mono text-zinc-500 ml-2">OUTPUT_BUFFER.TXT</span>
 
@@ -1196,9 +1442,12 @@ export default function AsciiConverter() {
                 )}
               </div>
               <div className="flex gap-2 relative">
-                <button onClick={copyToClipboard} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors relative group/btn">
-                  {copied ? <Check className="w-4 h-4 text-purple-400" /> : <Copy className="w-4 h-4" />}
-                  <span className="absolute -top-9 left-1/2 -translate-x-1/2 bg-zinc-800 text-xs px-2.5 py-1 rounded whitespace-nowrap z-50 opacity-0 group-hover/btn:opacity-100 pointer-events-none transition-opacity shadow-lg">{copied ? 'Copied!' : 'Copy'}</span>
+                <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 px-2.5 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors text-[11px] font-medium" title="Upload">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>UPLOAD</span>
+                </button>
+                <button onClick={copyToClipboard} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                  {copied ? <Check className="w-4 h-4" style={{ color: themeConfig.accent }} /> : <Copy className="w-4 h-4" />}
                 </button>
                 <div className="relative" ref={exportMenuRef}>
                   <button
@@ -1230,16 +1479,16 @@ export default function AsciiConverter() {
             </div>
 
             {/* Output Canvas/Terminal */}
-            <div className="flex-grow relative bg-[#0a0a0a] flex items-center justify-center overflow-auto custom-scrollbar z-10 w-full">
+            <div className="flex-grow relative bg-[#0a0a0a] flex items-center justify-center overflow-auto hide-scrollbar z-10 w-full" style={{ minHeight: 0 }}>
               {/* Scanline overlay effect */}
               <div className="absolute inset-0 pointer-events-none bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEElEQVQIW2NkYGD4z8DAwMgAI0AMCZ1P+wwAAAABJRU5ErkJggg==')] opacity-20 z-20"></div>
 
               {/* Loading / Error Overlays */}
               {isProcessing && !errorMsg && (
                 <div className="absolute z-30 flex flex-col items-center justify-center bg-[#0a0a0a]/80 inset-0 backdrop-blur-sm">
-                  <Wand2 className="w-8 h-8 text-purple-400 animate-bounce mb-4" />
+                  <Wand2 className="w-8 h-8 animate-bounce mb-4" style={{ color: themeConfig.accent }} />
                   <div className="text-white font-bold text-sm mb-2">{isGif ? `Verarbeite GIF (${processingProgress}%)...` : 'Erzeuge ASCII...'}</div>
-                  {isGif && <div className="w-48 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div className="h-full bg-purple-500 transition-all duration-200 shadow-[0_0_10px_rgba(52,211,153,0.5)]" style={{ width: `${processingProgress}%` }}></div></div>}
+                  {isGif && <div className="w-48 h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div className="h-full transition-all duration-200" style={{ width: `${processingProgress}%`, background: themeConfig.accent, boxShadow: `0 0 10px ${themeConfig.hover}` }}></div></div>}
                 </div>
               )}
               {errorMsg && (
@@ -1252,45 +1501,72 @@ export default function AsciiConverter() {
 
               {/* Display Area */}
               {!sourceUrl ? (
-                <div className="absolute inset-0 flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity duration-500">
-                  <AsciiDonut />
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center transition-all duration-300"
+                  onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); dragCounterRef.current++; setIsHoveringDrop(true); }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); dragCounterRef.current--; if (dragCounterRef.current <= 0) { dragCounterRef.current = 0; setIsHoveringDrop(false); } }}
+                  onDrop={(e) => {
+                    e.preventDefault(); e.stopPropagation(); dragCounterRef.current = 0; setIsHoveringDrop(false);
+                    const file = e.dataTransfer?.files?.[0];
+                    if (file) processFile(file, appMode, resolution);
+                  }}
+                >
+                  <div className={`transition-opacity duration-300 ${isHoveringDrop ? 'opacity-20' : 'opacity-80'}`}>
+                    <AsciiDonut accentColor={themeConfig.accent} />
+                  </div>
+                  {isHoveringDrop && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20" style={{ background: `rgba(10,10,10,0.7)`, boxShadow: `inset 0 0 60px rgba(${themeConfig.rgb}, 0.15)` }}>
+                      <div className="p-4 rounded-2xl border-2 border-dashed transition-all" style={{ borderColor: `rgba(${themeConfig.rgb}, 0.5)` }}>
+                        <Upload className="w-8 h-8" style={{ color: themeConfig.accent }} />
+                      </div>
+                      <p className="text-zinc-300 text-sm mt-3 font-medium">Loslassen zum Laden</p>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <pre
-                  ref={asciiDisplayRef}
-                  className="transition-opacity duration-200 z-10 m-auto p-4"
-                  style={{
-                    fontFamily: '"SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace',
-                    lineHeight: debouncedSettings.format === 'braille' ? '1em' : '1.1em',
-                    letterSpacing: '0',
-                    fontVariantLigatures: 'none',
-                    fontSize: debouncedSettings.format === 'braille' ? '10px' : '8px',
-                    opacity: isProcessing ? 0.3 : 1,
-                    userSelect: isPlaying && frames.length > 1 ? 'none' : 'text'
-                  }}
-                />
+                <>
+                  {debouncedSettings.colorized ? (
+                    <canvas
+                      ref={canvasDisplayRef}
+                      className="transition-opacity duration-200 z-10 m-auto p-4 object-contain"
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '100%',
+                        opacity: isProcessing ? 0.3 : 1
+                      }}
+                    />
+                  ) : (
+                    <pre
+                      ref={asciiDisplayRef}
+                      className="transition-opacity duration-200 z-10 m-auto p-4"
+                      style={{
+                        fontFamily: '"Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace',
+                        lineHeight: debouncedSettings.format === 'braille' ? '1em' : '1.1em',
+                        letterSpacing: '0',
+                        fontVariantLigatures: 'none',
+                        fontSize: debouncedSettings.format === 'braille' ? '10px' : '8px',
+                        opacity: isProcessing ? 0.3 : 1,
+                        userSelect: isPlaying && frames.length > 1 ? 'none' : 'text'
+                      }}
+                    />
+                  )}
+                </>
               )}
 
-              {/* Overlay stats */}
-              {frames.length > 0 && !isProcessing && !errorMsg && (
-                <div className="fixed bottom-6 right-8 text-[10px] font-mono text-zinc-600 z-30 flex flex-col items-end pointer-events-none drop-shadow-md bg-[#0a0a0a]/60 px-3 py-2 rounded-lg backdrop-blur-md">
-                  <span>FPS: {isGif && frames.length > 1 ? (1000 / (frames[currentFrameIdx]?.delay || 100)).toFixed(1) : '—'}</span>
-                  <span>RES: {debouncedSettings.resolution}</span>
-                  <span>ALGO: {debouncedSettings.format.toUpperCase()}</span>
-                </div>
-              )}
+
             </div>
           </div>
         </main>
 
         {/* Footer */}
-        <footer className="mt-auto border-t border-zinc-800/50 pt-6 pb-2 flex flex-col md:flex-row justify-between items-center text-xs font-mono text-zinc-500">
+        <footer className="mt-auto border-t border-zinc-800/50 pt-3 pb-2 flex flex-col md:flex-row justify-between items-center text-xs font-mono text-zinc-500">
           <p>© {new Date().getFullYear()} ASCII.VERT. All systems nominal.</p>
-          <div className="flex gap-4 mt-4 md:mt-0">
+          <div className="flex gap-4 mt-2 md:mt-0">
             <a href="#" className="hover:text-zinc-300">Privacy</a>
             <a href="#" className="hover:text-zinc-300">Terms</a>
             <div className="flex items-center gap-1 cursor-default">
-              <span className="w-2 h-2 rounded-full bg-purple-500 inline-block animate-pulse"></span>
+              <span className="w-2 h-2 rounded-full inline-block animate-pulse" style={{ background: themeConfig.accent }}></span>
               System Status
             </div>
           </div>
@@ -1305,7 +1581,7 @@ export default function AsciiConverter() {
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-zinc-950/60 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-400 to-violet-500 flex items-center justify-center shadow-[0_0_15px_rgba(52,211,153,0.3)]">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${themeConfig.accent}, ${themeConfig.accent}cc)`, boxShadow: `0 0 15px ${themeConfig.hover}` }}>
                   <Search className="w-4 h-4 text-[#050505]" />
                 </div>
                 <div>
@@ -1332,12 +1608,14 @@ export default function AsciiConverter() {
                     onChange={(e) => setGifSearchQuery(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { searchGifs(gifSearchQuery, 0); setGifSearchOffset(0); } }}
                     placeholder="GIF suchen... (z.B. anime, cat, meme)"
-                    className="w-full pl-10 pr-4 py-2.5 bg-zinc-950/60 border border-zinc-800 rounded-xl text-zinc-200 text-xs placeholder-zinc-500 focus:outline-none focus:border-purple-500/50 transition-colors font-mono"
+                    className="w-full pl-10 pr-4 py-2.5 bg-zinc-950/60 border border-zinc-800 rounded-xl text-zinc-200 text-xs placeholder-zinc-500 focus:outline-none transition-colors"
+                    style={{ fontFamily: '"Geist Mono", monospace' }}
                   />
                 </div>
                 <button
                   onClick={() => { searchGifs(gifSearchQuery, 0); setGifSearchOffset(0); }}
-                  className="px-4 py-2.5 bg-purple-500 hover:bg-purple-400 text-[#050505] rounded-xl text-xs font-bold transition-colors shadow-[0_0_10px_rgba(52,211,153,0.2)]"
+                  className="px-4 py-2.5 text-[#050505] rounded-xl text-xs font-bold transition-colors"
+                  style={{ background: themeConfig.accent, boxShadow: `0 0 10px ${themeConfig.hover}` }}
                 >
                   Suchen
                 </button>
@@ -1348,7 +1626,7 @@ export default function AsciiConverter() {
                   <button
                     key={tag}
                     onClick={() => { setGifSearchQuery(tag); searchGifs(tag, 0); setGifSearchOffset(0); }}
-                    className="px-2.5 py-1 text-[10px] font-medium bg-zinc-800/60 border border-zinc-700/50 rounded-full text-zinc-400 hover:text-purple-400 hover:border-purple-500/30 hover:bg-purple-500/5 transition-all"
+                    className="px-2.5 py-1 text-[10px] font-medium bg-zinc-800/60 border border-zinc-700/50 rounded-full text-zinc-400 hover:border-zinc-600 hover:bg-zinc-800 transition-all"
                   >
                     {tag}
                   </button>
@@ -1360,7 +1638,7 @@ export default function AsciiConverter() {
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
               {gifSearchLoading && gifSearchResults.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-zinc-500">
-                  <Loader2 className="w-8 h-8 animate-spin text-purple-400 mb-3" />
+                  <Loader2 className="w-8 h-8 animate-spin mb-3" style={{ color: themeConfig.accent }} />
                   <p className="text-xs font-mono">Lade GIFs...</p>
                 </div>
               ) : gifSearchResults.length === 0 ? (
@@ -1374,7 +1652,8 @@ export default function AsciiConverter() {
                     {gifSearchResults.map((gif) => (
                       <div
                         key={gif.id}
-                        className="relative group rounded-xl overflow-hidden border border-zinc-800 hover:border-purple-500/50 transition-all duration-300 bg-zinc-950 aspect-square"
+                        className="relative group rounded-xl overflow-hidden border border-zinc-800 transition-all duration-300 bg-zinc-950 aspect-square"
+                        style={{ '--hover-border': `rgba(${themeConfig.rgb}, 0.5)` }}
                       >
                         <img
                           src={gif.images?.fixed_height_small?.url || gif.images?.fixed_height?.url}
@@ -1387,7 +1666,8 @@ export default function AsciiConverter() {
                           <p className="text-[9px] text-zinc-200 truncate mb-1.5">{gif.title || 'GIF'}</p>
                           <button
                             onClick={() => loadGifFromUrl(gif.images?.original?.url || gif.images?.fixed_height?.url, gif.title)}
-                            className="flex items-center justify-center gap-1 w-full py-1.5 bg-purple-500 hover:bg-purple-400 text-[#050505] rounded-lg text-[10px] font-bold transition-colors"
+                            className="flex items-center justify-center gap-1 w-full py-1.5 text-[#050505] rounded-lg text-[10px] font-bold transition-colors"
+                            style={{ background: themeConfig.accent }}
                           >
                             <Plus className="w-3.5 h-3.5" />
                             Zum Converter
@@ -1401,7 +1681,7 @@ export default function AsciiConverter() {
                     <button
                       onClick={() => searchGifs(gifSearchQuery, gifSearchOffset)}
                       disabled={gifSearchLoading}
-                      className="px-6 py-2 bg-zinc-800/60 border border-zinc-700/50 hover:border-purple-500/30 hover:bg-purple-500/5 text-zinc-400 hover:text-purple-400 rounded-xl text-xs font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+                      className="px-6 py-2 bg-zinc-800/60 border border-zinc-700/50 hover:border-zinc-600 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-xl text-xs font-medium transition-all disabled:opacity-50 flex items-center gap-2"
                     >
                       {gifSearchLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                       Mehr laden
@@ -1427,6 +1707,45 @@ export default function AsciiConverter() {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(39,39,42,0.8); border: 2px solid transparent; background-clip: padding-box; border-radius: 5px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(63,63,70,0.8); background-clip: padding-box; }
+
+        /* Hidden scrollbar utility */
+        .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+
+        /* Fullscreen scaling fix */
+        [data-output-panel]:fullscreen { background: #0a0a0a; display: flex; flex-direction: column; }
+        [data-output-panel]:fullscreen > div:last-child { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; }
+        [data-output-panel]:fullscreen pre { max-width: 100vw; max-height: 100vh; overflow: auto; margin: auto; }
+
+        /* Performance mode */
+        .perf-mode * { transition-duration: 0s !important; animation-duration: 0s !important; }
+        .perf-mode .animate-pulse { animation: none !important; }
+        .perf-mode .animate-bounce { animation: none !important; }
+        .perf-mode .animate-spin { animation: none !important; }
+
+        /* Themed Checkboxes */
+        .themed-checkbox { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; }
+        .themed-checkbox input { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; margin: 0; z-index: 1; }
+        .themed-checkbox .checkmark { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid #52525b; background: #18181b; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        .themed-checkbox input:checked + .checkmark { background: var(--cb-color); border-color: var(--cb-color); box-shadow: 0 0 8px rgba(var(--cb-rgb), 0.35); }
+        .themed-checkbox input:checked + .checkmark::after { content: ''; display: block; width: 4px; height: 7px; border: solid #050505; border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-1px); }
+        .themed-checkbox:hover .checkmark { border-color: #71717a; }
+
+        /* Select/Combobox glass styling */
+        select { background-color: rgba(24, 24, 27, 0.8) !important; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        select option { background: rgba(24, 24, 27, 0.95); color: #d4d4d8; padding: 10px 12px; border-bottom: 1px solid rgba(63, 63, 70, 0.3); }
+        select option:checked, select option:hover { background: rgba(63, 63, 70, 0.6); }
+        select:focus { border-color: var(--accent, #a855f7) !important; box-shadow: 0 0 0 1px var(--accent, #a855f7), 0 4px 20px rgba(0,0,0,0.3); }
+
+        /* Dual range slider */
+        .dual-range-wrap { position: relative; height: 20px; }
+        .dual-range { position: absolute; width: 100%; top: 0; left: 0; height: 20px; margin: 0; -webkit-appearance: none; appearance: none; background: transparent; pointer-events: none; outline: none; }
+        .dual-range::-webkit-slider-runnable-track { height: 6px; background: transparent; border-radius: 3px; }
+        .dual-range:last-child::-webkit-slider-runnable-track { background: #27272a; }
+        .dual-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--range-color, #a855f7); border: 2px solid #18181b; box-shadow: 0 0 6px rgba(0,0,0,0.5); cursor: pointer; pointer-events: all; margin-top: -5px; transition: transform 0.15s ease; }
+        .dual-range::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        .dual-range::-moz-range-track { height: 6px; background: #27272a; border-radius: 3px; border: none; }
+        .dual-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--range-color, #a855f7); border: 2px solid #18181b; box-shadow: 0 0 6px rgba(0,0,0,0.5); cursor: pointer; pointer-events: all; }
       `}} />
     </div>
   );
@@ -1467,22 +1786,49 @@ const convertCanvasToAscii = async (sourceCanvas, options) => {
       applyDithering(data, width, height, numLevels);
     }
 
-    let result = '';
+    let offCanvas = null;
+    let offCtx = null;
+    let charWidth = 0;
+    let charHeight = 0;
 
-    if (format === 'braille') {
-      result = processBraille(data, originalData, width, height, invert, threshold, colorized);
-    } else {
-      const chars = ASCII_FORMATS[format].chars;
-      result = processStandardAscii(data, originalData, width, height, chars, invert, colorized);
+    if (colorized) {
+      offCanvas = document.createElement('canvas');
+      offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+      const fontSize = format === 'braille' ? 10 : 8;
+      const lineHeight = format === 'braille' ? 1 : 1.1;
+      const fontString = `${fontSize}px "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace`;
+
+      offCtx.font = fontString;
+      offCtx.textBaseline = "top";
+      charWidth = offCtx.measureText('W').width;
+      charHeight = fontSize * lineHeight;
+
+      const cols = format === 'braille' ? width / 2 : width;
+      const rows = format === 'braille' ? height / 4 : height;
+
+      offCanvas.width = Math.ceil(cols * charWidth);
+      offCanvas.height = Math.ceil(rows * charHeight);
+
+      offCtx.font = fontString;
+      offCtx.textBaseline = "top";
     }
 
-    resolve(result);
+    let resultText = '';
+
+    if (format === 'braille') {
+      resultText = processBraille(data, originalData, width, height, invert, threshold, colorized, offCtx, charWidth, charHeight);
+    } else {
+      const chars = ASCII_FORMATS[format].chars;
+      resultText = processStandardAscii(data, originalData, width, height, chars, invert, colorized, offCtx, charWidth, charHeight);
+    }
+
+    resolve({ text: resultText, canvas: colorized ? offCanvas : null });
   });
 };
 
 const getBrightness = (r, g, b) => (r * 0.299 + g * 0.587 + b * 0.114);
 
-const processStandardAscii = (data, originalData, width, height, chars, invert, colorized) => {
+const processStandardAscii = (data, originalData, width, height, chars, invert, colorized, offCtx, cw, ch) => {
   let resultStr = '';
   const charLen = chars.length;
 
@@ -1500,17 +1846,17 @@ const processStandardAscii = (data, originalData, width, height, chars, invert, 
       const char = chars[charIndex];
 
       if (colorized && char !== ' ') {
-        resultStr += `<span style="color:rgb(${originalData[offset]},${originalData[offset + 1]},${originalData[offset + 2]})">${char}</span>`;
-      } else {
-        resultStr += char;
+        offCtx.fillStyle = `rgb(${originalData[offset]},${originalData[offset + 1]},${originalData[offset + 2]})`;
+        offCtx.fillText(char, x * cw, y * ch);
       }
+      resultStr += char;
     }
     resultStr += '\n';
   }
   return resultStr;
 };
 
-const processBraille = (data, originalData, width, height, invert, threshold, colorized) => {
+const processBraille = (data, originalData, width, height, invert, threshold, colorized, offCtx, cw, ch) => {
   let resultStr = '';
 
   for (let y = 0; y < height; y += 4) {
@@ -1540,10 +1886,10 @@ const processBraille = (data, originalData, width, height, invert, threshold, co
       const char = String.fromCharCode(0x2800 + brailleValue);
 
       if (colorized && activeCount > 0 && brailleValue > 0) {
-        resultStr += `<span style="color:rgb(${Math.round(sumR / activeCount)},${Math.round(sumG / activeCount)},${Math.round(sumB / activeCount)})">${char}</span>`;
-      } else {
-        resultStr += char;
+        offCtx.fillStyle = `rgb(${Math.round(sumR / activeCount)},${Math.round(sumG / activeCount)},${Math.round(sumB / activeCount)})`;
+        offCtx.fillText(char, (x / 2) * cw, (y / 4) * ch);
       }
+      resultStr += char;
     }
     resultStr += '\n';
   }

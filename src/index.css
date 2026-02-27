@@ -8,11 +8,20 @@ body,
     min-height: 100vh;
     background-color: #050505;
     color: #e4e4e7;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: 'Geist', system-ui, -apple-system, sans-serif;
 }
 
 *,
 *::before,
 *::after {
     box-sizing: border-box;
+}
+
+/* Hide scrollbar but allow scrolling */
+html {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+}
+html::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Opera */
 }
