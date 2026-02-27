@@ -1,0 +1,381 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, Download, Settings, Copy, RefreshCw, Maximize2, Terminal, Code2, Sparkles, SlidersHorizontal, Type } from 'lucide-react';
+
+// --- Micro-animation Component: Scrambles text on hover/mount ---
+const ScrambleText = ({ text, className = "" }) => {
+  const [displayText, setDisplayText] = useState(text);
+  const chars = "!<>-_\\\\/[]{}—=+*^?#________";
+  
+  const scramble = () => {
+    let iteration = 0;
+    const maxIterations = text.length;
+    
+    const interval = setInterval(() => {
+      setDisplayText((prev) => 
+        text.split("").map((letter, index) => {
+          if (index < iteration) return text[index];
+          return chars[Math.floor(Math.random() * chars.length)];
+        }).join("")
+      );
+      
+      if (iteration >= maxIterations) clearInterval(interval);
+      iteration += 1 / 3; 
+    }, 30);
+  };
+
+  useEffect(() => {
+    scramble();
+  }, [text]);
+
+  return (
+    <span 
+      className={`inline-block font-mono ${className}`} 
+      onMouseEnter={scramble}
+    >
+      {displayText}
+    </span>
+  );
+};
+
+// --- Animated ASCII Wave Background ---
+const AsciiWaveBackground = () => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    let animationFrameId;
+    let width, height;
+    let mouseX = 0, mouseY = 0;
+    let targetMouseX = 0, targetMouseY = 0;
+
+    const chars = " .:-=+*#%@";
+    const fontSize = 16;
+    let cols = 0, rows = 0;
+
+    const resize = () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+      cols = Math.floor(width / fontSize);
+      rows = Math.floor(height / fontSize);
+      ctx.font = `${fontSize}px monospace`;
+    };
+
+    window.addEventListener('resize', resize);
+    resize();
+
+    const handleMouseMove = (e) => {
+      targetMouseX = e.clientX;
+      targetMouseY = e.clientY;
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+
+    const render = (time) => {
+      // Smooth mouse follow
+      mouseX += (targetMouseX - mouseX) * 0.1;
+      mouseY += (targetMouseY - mouseY) * 0.1;
+
+      ctx.fillStyle = '#050505'; // Deep black base
+      ctx.fillRect(0, 0, width, height);
+      
+      const t = time * 0.001;
+
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          // Calculate grid coordinates
+          const px = x * fontSize;
+          const py = y * fontSize;
+
+          // Distance to mouse for interaction
+          const dx = px - mouseX;
+          const dy = py - mouseY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const maxDist = 300;
+          const mouseInfluence = Math.max(0, 1 - dist / maxDist);
+
+          // Wave math
+          const waveX = Math.sin(x * 0.1 + t + mouseInfluence * 2);
+          const waveY = Math.cos(y * 0.1 + t);
+          const depth = (waveX * waveY + 1) / 2; // Normalize 0 to 1
+
+          // Select character based on depth + mouse influence
+          const charIndex = Math.floor(depth * (chars.length - 1));
+          const char = chars[charIndex];
+
+          // Determine color and opacity based on depth
+          const opacity = 0.1 + (depth * 0.3) + (mouseInfluence * 0.5);
+          
+          // Subtle green/cyan tint for the modern cyber look
+          if (mouseInfluence > 0.1) {
+             ctx.fillStyle = `rgba(52, 211, 153, ${opacity + 0.2})`; // Tailwind emerald-400
+          } else {
+             ctx.fillStyle = `rgba(161, 161, 170, ${opacity})`; // Tailwind zinc-400
+          }
+
+          ctx.fillText(char, px, py);
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render(0);
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      window.removeEventListener('mousemove', handleMouseMove);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  return (
+    <canvas 
+      ref={canvasRef} 
+      className="fixed inset-0 w-full h-full pointer-events-none z-0"
+    />
+  );
+};
+
+// --- Mockup ASCII Donut (Classic 3D math) ---
+const AsciiDonut = () => {
+  const [frame, setFrame] = useState("");
+
+  useEffect(() => {
+    let A = 0, B = 0;
+    let animationId;
+
+    const renderDonut = () => {
+      const b = [];
+      const z = [];
+      A += 0.04; 
+      B += 0.02;
+      const cA = Math.cos(A), sA = Math.sin(A), cB = Math.cos(B), sB = Math.sin(B);
+      
+      for(let k=0; k<1760; k++) { 
+        b[k] = k % 80 === 79 ? '\n' : ' '; 
+        z[k] = 0; 
+      }
+      
+      for(let j=0; j<6.28; j+=0.07) {
+        const ct = Math.cos(j), st = Math.sin(j);
+        for(let i=0; i<6.28; i+=0.02) {
+          const sp = Math.sin(i), cp = Math.cos(i),
+                h = ct + 2, D = 1 / (sp * h * sA + st * cA + 5),
+                t = sp * h * cA - st * sA;
+          
+          const x = 0 | (40 + 30 * D * (cp * h * cB - t * sB));
+          const y = 0 | (11 + 15 * D * (cp * h * sB + t * cB));
+          const o = x + 80 * y;
+          const N = 0 | (8 * ((st * sA - sp * ct * cA) * cB - sp * ct * sA - st * cA - cp * ct * sB));
+          
+          if(y < 22 && y >= 0 && x >= 0 && x < 79 && D > z[o]) {
+            z[o] = D;
+            b[o] = ".,-~:;=!*#$@"[N > 0 ? N : 0];
+          }
+        }
+      }
+      setFrame(b.join(''));
+      animationId = requestAnimationFrame(renderDonut);
+    };
+
+    renderDonut();
+    return () => cancelAnimationFrame(animationId);
+  }, []);
+
+  return (
+    <pre className="font-mono text-[8px] sm:text-[10px] md:text-xs leading-[0.85] text-emerald-400 overflow-hidden w-full h-full flex items-center justify-center select-none">
+      {frame}
+    </pre>
+  );
+};
+
+
+// --- Main Application ---
+export default function App() {
+  const [isHoveringDrop, setIsHoveringDrop] = useState(false);
+  const [density, setDensity] = useState(50);
+  const [contrast, setContrast] = useState(100);
+
+  return (
+    <div className="min-h-screen bg-[#050505] text-zinc-200 font-sans selection:bg-emerald-500/30 overflow-x-hidden relative">
+      <AsciiWaveBackground />
+
+      {/* Main Content Overlay */}
+      <div className="relative z-10 container mx-auto px-4 py-8 min-h-screen flex flex-col">
+        
+        {/* Navigation */}
+        <nav className="flex justify-between items-center mb-16">
+          <div className="flex items-center gap-2 text-white">
+            <Terminal className="w-6 h-6 text-emerald-400" />
+            <span className="font-mono font-bold text-lg tracking-tight">
+              <ScrambleText text="ASCII.FLUX" />
+            </span>
+          </div>
+          <div className="flex items-center gap-6 font-mono text-xs text-zinc-400">
+            <a href="#" className="hover:text-emerald-400 transition-colors">/docs</a>
+            <a href="#" className="hover:text-emerald-400 transition-colors">/api</a>
+            <button className="flex items-center gap-2 bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800 backdrop-blur-md px-4 py-2 rounded-full text-zinc-200 transition-all duration-300 hover:border-emerald-500/30 group">
+              <Code2 className="w-4 h-4 group-hover:text-emerald-400 transition-colors" />
+              <span>GITHUB</span>
+            </button>
+          </div>
+        </nav>
+
+        {/* Hero Section */}
+        <header className="max-w-3xl mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono mb-6 backdrop-blur-md">
+            <Sparkles className="w-3 h-3" />
+            <ScrambleText text="v2.0 Beta Engine Online" />
+          </div>
+          <h1 className="text-5xl md:text-7xl font-bold tracking-tighter mb-4 text-white">
+            Transform pixels into <br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-500 font-mono italic pr-4">
+              <ScrambleText text="characters." />
+            </span>
+          </h1>
+          <p className="text-zinc-400 text-lg max-w-xl leading-relaxed">
+            The next-generation algorithm for converting images, videos, and 3D models into pure, optimized ASCII art. Real-time rendering enabled.
+          </p>
+        </header>
+
+        {/* Converter Interface */}
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow mb-12">
+          
+          {/* Left Panel: Inputs & Settings */}
+          <div className="lg:col-span-5 flex flex-col gap-6">
+            
+            {/* Dropzone */}
+            <div 
+              className={`relative flex-grow flex flex-col items-center justify-center p-12 rounded-3xl border-2 border-dashed transition-all duration-300 backdrop-blur-xl bg-zinc-950/40 ${isHoveringDrop ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-zinc-800 hover:border-zinc-700'}`}
+              onMouseEnter={() => setIsHoveringDrop(true)}
+              onMouseLeave={() => setIsHoveringDrop(false)}
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-zinc-900/50 to-transparent rounded-3xl -z-10" />
+              
+              <div className={`p-4 rounded-full bg-zinc-900 border border-zinc-800 mb-6 transition-transform duration-500 ${isHoveringDrop ? 'scale-110' : 'scale-100'}`}>
+                <Upload className={`w-8 h-8 ${isHoveringDrop ? 'text-emerald-400' : 'text-zinc-400'}`} />
+              </div>
+              <h3 className="text-xl font-medium text-white mb-2">Initialize Conversion</h3>
+              <p className="text-zinc-500 text-sm text-center max-w-[250px] mb-8">
+                Drag and drop your image file here, or click to browse your system.
+              </p>
+              
+              <button className="px-6 py-3 rounded-xl bg-white text-black font-medium hover:bg-zinc-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)]">
+                Select File
+              </button>
+            </div>
+
+            {/* Settings Card */}
+            <div className="bg-zinc-950/60 backdrop-blur-xl border border-zinc-800/80 p-6 rounded-3xl">
+              <div className="flex items-center gap-2 mb-6 text-white font-mono text-sm border-b border-zinc-800 pb-4">
+                <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
+                <span>PARAMETERS</span>
+              </div>
+              
+              <div className="space-y-6">
+                <div>
+                  <div className="flex justify-between text-xs font-mono text-zinc-400 mb-2">
+                    <span>DENSITY_MAP</span>
+                    <span className="text-emerald-400">{density}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="1" max="100" 
+                    value={density} 
+                    onChange={(e) => setDensity(e.target.value)}
+                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" 
+                  />
+                </div>
+                
+                <div>
+                  <div className="flex justify-between text-xs font-mono text-zinc-400 mb-2">
+                    <span>CONTRAST_THRESHOLD</span>
+                    <span className="text-emerald-400">{contrast}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="1" max="200" 
+                    value={contrast} 
+                    onChange={(e) => setContrast(e.target.value)}
+                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" 
+                  />
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button className="flex-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 py-3 rounded-xl text-sm font-medium transition-colors flex justify-center items-center gap-2">
+                    <Type className="w-4 h-4" /> Charset
+                  </button>
+                  <button className="flex-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 py-3 rounded-xl text-sm font-medium transition-colors flex justify-center items-center gap-2">
+                    <RefreshCw className="w-4 h-4" /> Invert
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Right Panel: Live Output */}
+          <div className="lg:col-span-7 flex flex-col h-[600px] lg:h-auto rounded-3xl border border-zinc-800/80 bg-zinc-950/80 backdrop-blur-2xl overflow-hidden shadow-2xl relative group">
+            
+            {/* Output Header */}
+            <div className="flex justify-between items-center px-6 py-4 bg-zinc-900/50 border-b border-zinc-800/80 backdrop-blur-md z-20">
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-zinc-700"></div>
+                  <div className="w-3 h-3 rounded-full bg-zinc-700"></div>
+                  <div className="w-3 h-3 rounded-full bg-emerald-500/50 animate-pulse"></div>
+                </div>
+                <span className="text-xs font-mono text-zinc-500 ml-2">OUTPUT_BUFFER.TXT</span>
+              </div>
+              <div className="flex gap-2">
+                <button className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                  <Copy className="w-4 h-4" />
+                </button>
+                <button className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                  <Download className="w-4 h-4" />
+                </button>
+                <button className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors">
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Output Canvas/Terminal */}
+            <div className="flex-grow relative bg-[#0a0a0a] p-4 flex items-center justify-center overflow-hidden">
+              {/* Scanline overlay effect */}
+              <div className="absolute inset-0 pointer-events-none bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEElEQVQIW2NkYGD4z8DAwMgAI0AMCZ1P+wwAAAABJRU5ErkJggg==')] opacity-20 z-10"></div>
+              
+              {/* The Live ASCII Donut */}
+              <div className="w-full h-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity duration-500">
+                <AsciiDonut />
+              </div>
+              
+              {/* Overlay stats */}
+              <div className="absolute bottom-4 right-6 text-[10px] font-mono text-zinc-600 z-20 flex flex-col items-end">
+                <span>FPS: 60.0</span>
+                <span>RES: 80x22</span>
+                <span>ALGO: RAYMARCH_V2</span>
+              </div>
+            </div>
+          </div>
+        </main>
+        
+        {/* Footer */}
+        <footer className="mt-auto border-t border-zinc-800/50 pt-6 pb-2 flex flex-col md:flex-row justify-between items-center text-xs font-mono text-zinc-500">
+          <p>© {new Date().getFullYear()} ASCII.FLUX. All systems nominal.</p>
+          <div className="flex gap-4 mt-4 md:mt-0">
+            <a href="#" className="hover:text-zinc-300">Privacy</a>
+            <a href="#" className="hover:text-zinc-300">Terms</a>
+            <a href="#" className="hover:text-zinc-300 flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+              System Status
+            </a>
+          </div>
+        </footer>
+
+      </div>
+    </div>
+  );
+}
