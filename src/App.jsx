@@ -881,9 +881,84 @@ export default function AsciiConverter() {
     setShowExportMenu(false);
   };
 
+  const decodeEntities = (text) => (
+    (text || '')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+  );
+
+  const getPlainFrameText = (text) => decodeEntities((text || '').replace(/<[^>]*>?/gm, ''));
+
+  const getAnsiFrameText = (frame) => {
+    const plainText = getPlainFrameText(frame?.text || '');
+    const canvas = frame?.canvas;
+
+    if (!canvas) {
+      return plainText;
+    }
+
+    const rawLines = plainText.endsWith('\n') ? plainText.slice(0, -1).split('\n') : plainText.split('\n');
+    if (rawLines.length === 0) return plainText;
+
+    const rows = rawLines.length;
+    const cols = Math.max(1, ...rawLines.map(line => line.length));
+    const cellWidth = canvas.width / cols;
+    const cellHeight = canvas.height / rows;
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+    let ansi = '';
+    let lastColor = '';
+
+    for (let y = 0; y < rows; y++) {
+      const line = rawLines[y];
+      for (let x = 0; x < line.length; x++) {
+        const ch = line[x];
+        if (ch === ' ') {
+          ansi += ch;
+          continue;
+        }
+
+        const sx = Math.min(canvas.width - 1, Math.max(0, Math.floor((x + 0.5) * cellWidth)));
+        const sy = Math.min(canvas.height - 1, Math.max(0, Math.floor((y + 0.5) * cellHeight)));
+        const idx = (sy * canvas.width + sx) * 4;
+        const alpha = imageData[idx + 3];
+
+        if (alpha === 0) {
+          ansi += ch;
+          continue;
+        }
+
+        const r = imageData[idx];
+        const g = imageData[idx + 1];
+        const b = imageData[idx + 2];
+        const colorCode = `\x1b[38;2;${r};${g};${b}m`;
+
+        if (colorCode !== lastColor) {
+          ansi += colorCode;
+          lastColor = colorCode;
+        }
+
+        ansi += ch;
+      }
+
+      if (lastColor) {
+        ansi += '\x1b[0m';
+        lastColor = '';
+      }
+      if (y < rows - 1) ansi += '\n';
+    }
+
+    return ansi;
+  };
+
   const exportTxt = () => {
     if (frames.length === 0) return;
-    const textContent = frames.map((f, i) => frames.length > 1 ? `Frame ${i + 1}:\n${f.text.replace(/<[^>]*>?/gm, '')}` : f.text.replace(/<[^>]*>?/gm, '')).join('\n\n====================\n\n');
+    const textContent = frames
+      .map((f, i) => (frames.length > 1 ? `Frame ${i + 1}:\n${getPlainFrameText(f.text)}` : getPlainFrameText(f.text)))
+      .join('\n\n====================\n\n');
     triggerDownload(isGif ? 'ascii_animation.txt' : 'ascii_art.txt', textContent, 'text/plain');
   };
 
@@ -909,17 +984,12 @@ export default function AsciiConverter() {
       const zip = new window.JSZip();
       const folderName = isGif ? "ascii_frames" : "ascii_export";
       const folder = zip.folder(folderName);
-      const ext = debouncedSettings.colorized ? 'ansi' : 'txt';
+      const useColorExport = colorized && frames.some(f => !!f.canvas);
+      const ext = useColorExport ? 'ansi' : 'txt';
       let delaysInfo = "Frame Delays (in Millisekunden):\n\n";
 
       frames.forEach((f, i) => {
-        let text = f.text;
-        if (!debouncedSettings.colorized) {
-          text = text.replace(/<[^>]*>?/gm, '');
-        } else {
-          text = text.replace(/<span style="color:rgb\((\d+),(\d+),(\d+)\)">(.*?)<\/span>/g, '\x1b[38;2;$1;$2;$3m$4\x1b[0m');
-        }
-        text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+        const text = useColorExport ? getAnsiFrameText(f) : getPlainFrameText(f.text);
 
         const padIndex = String(i + 1).padStart(3, '0');
         folder.file(`frame_${padIndex}.${ext}`, text);
@@ -940,15 +1010,10 @@ export default function AsciiConverter() {
 
   const exportAnsi = () => {
     if (frames.length === 0) return;
+    const useColorExport = colorized && frames.some(f => !!f.canvas);
     let ansiContent = '\x1b[2J';
     frames.forEach((f) => {
-      let text = f.text;
-      if (!debouncedSettings.colorized) {
-        text = text.replace(/<[^>]*>?/gm, '');
-      } else {
-        text = text.replace(/<span style="color:rgb\((\d+),(\d+),(\d+)\)">(.*?)<\/span>/g, '\x1b[38;2;$1;$2;$3m$4\x1b[0m');
-      }
-      text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      const text = useColorExport ? getAnsiFrameText(f) : getPlainFrameText(f.text);
       ansiContent += '\x1b[H' + text;
     });
     triggerDownload(isGif ? 'ascii_animation.ansi' : 'ascii_art.ansi', ansiContent, 'text/plain');
@@ -956,17 +1021,12 @@ export default function AsciiConverter() {
 
   const exportBash = () => {
     if (frames.length === 0) return;
+    const useColorExport = colorized && frames.some(f => !!f.canvas);
 
     const bashFrames = frames.map(f => {
-      let text = f.text;
-      if (!debouncedSettings.colorized) {
-        text = text.replace(/<[^>]*>?/gm, '');
-      } else {
-        text = text.replace(/<span style="color:rgb\((\d+),(\d+),(\d+)\)">(.*?)<\/span>/g, '__ESC__[38;2;$1;$2;$3m$4__ESC__[0m');
-      }
-      text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      let text = useColorExport ? getAnsiFrameText(f) : getPlainFrameText(f.text);
       text = text.replace(/\\/g, '\\\\').replace(/'/g, "'\\''").replace(/\n/g, '\\n');
-      text = text.replace(/__ESC__/g, '\\e');
+      text = text.replace(/\x1b/g, '\\e');
       return `'${text}'`;
     });
 
@@ -993,17 +1053,13 @@ export default function AsciiConverter() {
 
   const exportPowerShell = () => {
     if (frames.length === 0) return;
+    const useColorExport = colorized && frames.some(f => !!f.canvas);
 
     const psFrames = frames.map(f => {
-      let text = f.text;
-      if (!debouncedSettings.colorized) {
-        text = text.replace(/<[^>]*>?/gm, '');
-      } else {
-        text = text.replace(/<span style="color:rgb\((\d+),(\d+),(\d+)\)">(.*?)<\/span>/g, '__ESC__[38;2;$1;$2;$3m$4__ESC__[0m');
-      }
-      text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      let text = useColorExport ? getAnsiFrameText(f) : getPlainFrameText(f.text);
 
       text = text.replace(/'/g, "''");
+      text = text.replace(/\x1b/g, '__ESC__');
       return `'${text}'.Replace('__ESC__', $esc)`;
     });
 
@@ -1048,10 +1104,49 @@ export default function AsciiConverter() {
 
   const exportHtml = () => {
     if (frames.length === 0) return;
+    const useColorExport = colorized && frames.every(f => !!f.canvas);
     const fontSize = debouncedSettings.format === 'braille' ? '10px' : '8px';
     const lineHeight = debouncedSettings.format === 'braille' ? '1em' : '1.1em';
-
-    const htmlContent = `<!DOCTYPE html>
+    const htmlContent = useColorExport
+      ? `<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>ASCII Export</title>
+<style>
+  body { background: #0A0C10; color: #E5E7EB; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: auto; padding: 20px; }
+  img { max-width: 100%; height: auto; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<img id="ascii-display" alt="ASCII Export" />
+<script>
+  const frames = ${JSON.stringify(frames.map(f => ({ delay: f.delay, src: f.canvas?.toDataURL('image/png') || '' })))};
+  const display = document.getElementById('ascii-display');
+  if (frames.length <= 1) {
+    display.src = frames[0].src;
+  } else {
+    let i = 0;
+    let lastTime = performance.now();
+    let accumulatedTime = 0;
+    display.src = frames[0].src;
+    function animate(time) {
+      const dt = time - lastTime;
+      lastTime = time;
+      accumulatedTime += dt;
+      if (accumulatedTime >= frames[i].delay) {
+        accumulatedTime -= frames[i].delay;
+        i = (i + 1) % frames.length;
+        display.src = frames[i].src;
+      }
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+  }
+</script>
+</body>
+</html>`
+      : `<!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="UTF-8">
@@ -1093,18 +1188,13 @@ export default function AsciiConverter() {
 
   const exportPython = () => {
     if (frames.length === 0) return;
+    const useColorExport = colorized && frames.some(f => !!f.canvas);
 
     const pyFrames = frames.map(f => {
-      let text = f.text;
-      if (!debouncedSettings.colorized) {
-        text = text.replace(/<[^>]*>?/gm, '');
-      } else {
-        text = text.replace(/<span style="color:rgb\((\d+),(\d+),(\d+)\)">(.*?)<\/span>/g, '__ESC__[38;2;$1;$2;$3m$4__ESC__[0m');
-      }
-      text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      let text = useColorExport ? getAnsiFrameText(f) : getPlainFrameText(f.text);
 
       text = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
-      text = text.replace(/__ESC__/g, '\\033');
+      text = text.replace(/\x1b/g, '\\033');
       return `"${text}"`;
     });
     const delays = frames.map(f => f.delay);
